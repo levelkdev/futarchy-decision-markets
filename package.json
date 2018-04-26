@@ -9,6 +9,7 @@
     "src"
   ],
   "dependencies": {
+    "@gnosis.pm/gnosis-core-contracts": "^1.0.3",
     "moment": "^2.22.0",
     "truffle-blockchain-utils": "^0.0.3",
     "truffle-hdwallet-provider": "^0.0.3",

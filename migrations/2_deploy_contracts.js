@@ -1,9 +1,9 @@
 /* global artifacts */
 
-const ShrimpCoin = artifacts.require('ShrimpCoin')
+const FCRToken = artifacts.require('FCRToken')
 
 module.exports = function (deployer) {
   deployer.deploy(
-    ShrimpCoin
+    FCRToken
   )
 }

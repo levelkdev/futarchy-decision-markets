@@ -2,8 +2,8 @@ pragma solidity ^0.4.18;
 
 import 'zeppelin-solidity/contracts/token/ERC20/MintableToken.sol';
 
-contract ShrimpCoin is MintableToken {
-	string public constant name = "Shrimp Coin";
-	string public constant symbol = "SHRMP";
+contract FCRToken is MintableToken {
+	string public constant name = "FCR Token";
+	string public constant symbol = "FCR";
 	uint8 public constant decimals = 18;
 }
