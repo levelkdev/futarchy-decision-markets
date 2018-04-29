@@ -28,14 +28,14 @@ describe('TokenRatioFutarchy', () => {
   describe('when deployed', () => {
     it('sets token to the correct address', async () => {
       const duration = moment.duration({weeks: 2}).asSeconds()
-      const tokenRatioFutarchy = await TokenRatioFutarchy.new(
-        duration,
-        assetToken.address,
-        genericToken.address,
-        oracleFactory.address,
-        eventFactory.address,
-        ipfsHash
-      )
+      // const tokenRatioFutarchy = await TokenRatioFutarchy.new(
+      //   duration,
+      //   assetToken.address,
+      //   genericToken.address,
+      //   oracleFactory.address,
+      //   eventFactory.address,
+      //   ipfsHash
+      // )
     })
   })
 })
