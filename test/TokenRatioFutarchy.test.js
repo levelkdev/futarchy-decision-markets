@@ -4,6 +4,7 @@ const FCRToken = artifacts.require('FCRToken')
 const EtherToken = artifacts.require('EtherToken')
 const CentralizedOracleFactory = artifacts.require('CentralizedOracleFactory')
 const EventFactory = artifacts.require('EventFactory')
+const CategoricalEvent = artifacts.require('CategoricalEvent')
 const Math = artifacts.require('Math')
 const TokenRatioFutarchy = artifacts.require('TokenRatioFutarchy')
 
@@ -14,10 +15,13 @@ const { expectThrow, increaseTime, latestTime } = lkTestHelpers(web3)
 
 const { accounts } = web3.eth
 
-describe('TokenRatioFutarchy', () => {
-  let genericToken, assetToken, oracleFactory, eventFactory, ipfsHash
+const NULL_ADDR = '0x0000000000000000000000000000000000000000'
 
-  beforeEach(async () => {
+describe('TokenRatioFutarchy', () => {
+  let assetToken, genericToken, oracleFactory,
+      eventFactory, ipfsHash, tokenRatioFutarchy
+
+  before(async () => {
     genericToken  = await EtherToken.new()
     assetToken    = await FCRToken.new()
     oracleFactory = await CentralizedOracleFactory.new()
@@ -26,16 +30,77 @@ describe('TokenRatioFutarchy', () => {
   })
 
   describe('when deployed', () => {
-    it('sets token to the correct address', async () => {
+    before(async () => {
       const duration = moment.duration({weeks: 2}).asSeconds()
-      // const tokenRatioFutarchy = await TokenRatioFutarchy.new(
-      //   duration,
-      //   assetToken.address,
-      //   genericToken.address,
-      //   oracleFactory.address,
-      //   eventFactory.address,
-      //   ipfsHash
-      // )
+      tokenRatioFutarchy = await TokenRatioFutarchy.new(
+        duration,
+        assetToken.address,
+        genericToken.address,
+        oracleFactory.address,
+        eventFactory.address,
+        ipfsHash
+      )
+    })
+
+    it('sets the correct assetToken', async () => {
+      expect(await tokenRatioFutarchy._assetToken()).to.equal(assetToken.address)
+    })
+
+    it('sets the correct genericToken', async () => {
+      expect(await tokenRatioFutarchy._genericToken()).to.equal(genericToken.address)
+    })
+
+    it('sets the centralizedOracle', async () => {
+      expect(await tokenRatioFutarchy._centralizedOracle()).to.not.equal(undefined)
     })
   })
+
+  describe('createAssetTokenCollateralEvent()', () => {
+    before(async () => {
+      tokenRatioFutarchy = await deployTokenRatioFutarchy()
+    })
+
+    it('assigns _assetTokenCollateralEvent a categoricalEvent with _assetToken', async () => {
+      expect(await tokenRatioFutarchy._assetTokenCollateralEvent()).to.equal(NULL_ADDR)
+
+      const { logs } = await tokenRatioFutarchy.createAssetTokenCollateralEvent()
+      const categoricalEvent = logs.find(e => e.event === 'AssetTokenCollateralEventCreation')['args']['categoricalEvent']
+
+      expect(await tokenRatioFutarchy._assetTokenCollateralEvent()).to.equal(categoricalEvent)
+      expect(await CategoricalEvent.at(categoricalEvent).collateralToken()).to.equal(await tokenRatioFutarchy._assetToken())
+    })
+
+    it('throws if _assetTokenCollateralEvent has already been assigned')
+  })
+
+  describe('createGenericTokenCollateralEvent()', () => {
+    before(async () => {
+      tokenRatioFutarchy = deployTokenRatioFutarchy()
+    })
+    it('assigns _genericTokenCollateralEvent a categoricalEvent with _assetToken')
+    it('throws if _genericTokenCollateralEvent has already been assigned')
+  })
 })
+
+
+async function deployTokenRatioFutarchy(customParams = {}) {
+  const {
+    genericToken  = await EtherToken.new(),
+    assetToken    = await FCRToken.new(),
+    oracleFactory = await CentralizedOracleFactory.new(),
+    eventFactory  = await EventFactory.new(),
+    ipfsHash      = 'QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG',
+    duration      = moment.duration({weeks: 2}).asSeconds()
+  } = customParams
+
+  const futarchy = await TokenRatioFutarchy.new(
+    duration,
+    assetToken.address,
+    genericToken.address,
+    oracleFactory.address,
+    eventFactory.address,
+    ipfsHash
+  )
+
+  return futarchy
+}
