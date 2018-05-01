@@ -81,11 +81,19 @@ describe('TokenRatioFutarchy', () => {
 
   describe('createGenericTokenCollateralEvent()', () => {
     before(async () => {
-      tokenRatioFutarchy = await deployTokenRatioFutarchy()
+      marketFactory = await StandardMarketFactory.new()
+      assetToken    = await FCRToken.new()
+      marketMaker   = await LMSRMarketMaker.new()
+      tokenRatioFutarchy = await deployTokenRatioFutarchy(
+        {marketFactory, assetToken}
+      )
     })
-    it('assigns _genericTokenCollateralEvent a categoricalEvent with _assetToken', async () => {
-      await tokenRatioFutarchy.createAssetTokenCollateralEvent();
-      await tokenRatioFutarchy.createAssetTokenMarket(0);
+    it.only('assigns _genericTokenCollateralEvent a categoricalEvent with _assetToken', async () => {
+      await tokenRatioFutarchy.createAssetTokenCollateralEvent()
+      let event = await tokenRatioFutarchy._assetTokenCollateralEvent()
+      let marketGuy = await marketFactory.createMarket(event, marketMaker.address, 0)
+      // await tokenRatioFutarchy.createAssetTokenMarket(0)
+      console.log(marketGuy)
     })
     it('throws if _genericTokenCollateralEvent has already been assigned')
   })
