@@ -4,6 +4,8 @@ const FCRToken = artifacts.require('FCRToken')
 const EtherToken = artifacts.require('EtherToken')
 const CentralizedOracleFactory = artifacts.require('CentralizedOracleFactory')
 const EventFactory = artifacts.require('EventFactory')
+const StandardMarketFactory = artifacts.require('StandardMarketFactory')
+const LMSRMarketMaker = artifacts.require('LMSRMarketMaker')
 const CategoricalEvent = artifacts.require('CategoricalEvent')
 const Math = artifacts.require('Math')
 const TokenRatioFutarchy = artifacts.require('TokenRatioFutarchy')
@@ -18,14 +20,16 @@ const { accounts } = web3.eth
 const NULL_ADDR = '0x0000000000000000000000000000000000000000'
 
 describe('TokenRatioFutarchy', () => {
-  let assetToken, genericToken, oracleFactory,
-      eventFactory, ipfsHash, tokenRatioFutarchy
+  let assetToken, genericToken, oracleFactory, marketMaker,
+      eventFactory, marketFactory, ipfsHash, tokenRatioFutarchy
 
   before(async () => {
     genericToken  = await EtherToken.new()
     assetToken    = await FCRToken.new()
     oracleFactory = await CentralizedOracleFactory.new()
     eventFactory  = await EventFactory.new()
+    marketMaker   = await LMSRMarketMaker.new()
+    marketFactory = await StandardMarketFactory.new()
     ipfsHash      = 'QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG'
   })
 
@@ -38,6 +42,8 @@ describe('TokenRatioFutarchy', () => {
         genericToken.address,
         oracleFactory.address,
         eventFactory.address,
+        marketFactory.address,
+        marketMaker.address,
         ipfsHash
       )
     })
@@ -64,7 +70,7 @@ describe('TokenRatioFutarchy', () => {
       expect(await tokenRatioFutarchy._assetTokenCollateralEvent()).to.equal(NULL_ADDR)
 
       const { logs } = await tokenRatioFutarchy.createAssetTokenCollateralEvent()
-      const categoricalEvent = logs.find(e => e.event === 'AssetTokenCollateralEventCreation')['args']['categoricalEvent']
+      const categoricalEvent = logs.find(e => e.event === 'CategoricalEventCreation')['args']['categoricalEvent']
 
       expect(await tokenRatioFutarchy._assetTokenCollateralEvent()).to.equal(categoricalEvent)
       expect(await CategoricalEvent.at(categoricalEvent).collateralToken()).to.equal(await tokenRatioFutarchy._assetToken())
@@ -75,9 +81,12 @@ describe('TokenRatioFutarchy', () => {
 
   describe('createGenericTokenCollateralEvent()', () => {
     before(async () => {
-      tokenRatioFutarchy = deployTokenRatioFutarchy()
+      tokenRatioFutarchy = await deployTokenRatioFutarchy()
     })
-    it('assigns _genericTokenCollateralEvent a categoricalEvent with _assetToken')
+    it('assigns _genericTokenCollateralEvent a categoricalEvent with _assetToken', async () => {
+      await tokenRatioFutarchy.createAssetTokenCollateralEvent();
+      await tokenRatioFutarchy.createAssetTokenMarket(0);
+    })
     it('throws if _genericTokenCollateralEvent has already been assigned')
   })
 })
@@ -89,8 +98,10 @@ async function deployTokenRatioFutarchy(customParams = {}) {
     assetToken    = await FCRToken.new(),
     oracleFactory = await CentralizedOracleFactory.new(),
     eventFactory  = await EventFactory.new(),
+    marketFactory = await StandardMarketFactory.new(),
     ipfsHash      = 'QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG',
-    duration      = moment.duration({weeks: 2}).asSeconds()
+    duration      = moment.duration({weeks: 2}).asSeconds(),
+    marketMaker   = await LMSRMarketMaker.new()
   } = customParams
 
   const futarchy = await TokenRatioFutarchy.new(
@@ -99,6 +110,8 @@ async function deployTokenRatioFutarchy(customParams = {}) {
     genericToken.address,
     oracleFactory.address,
     eventFactory.address,
+    marketFactory.address,
+    marketMaker.address,
     ipfsHash
   )
 
