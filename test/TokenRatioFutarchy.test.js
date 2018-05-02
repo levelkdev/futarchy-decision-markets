@@ -9,6 +9,7 @@ const LMSRMarketMaker = artifacts.require('LMSRMarketMaker')
 const CategoricalEvent = artifacts.require('CategoricalEvent')
 const Math = artifacts.require('Math')
 const TokenRatioFutarchy = artifacts.require('TokenRatioFutarchy')
+const StandardMarket = artifacts.require('StandardMarket')
 
 import lkTestHelpers from 'lk-test-helpers'
 import moment from 'moment'
@@ -79,23 +80,36 @@ describe('TokenRatioFutarchy', () => {
     it('throws if _assetTokenCollateralEvent has already been assigned')
   })
 
-  describe('createGenericTokenCollateralEvent()', () => {
-    before(async () => {
-      marketFactory = await StandardMarketFactory.new()
-      assetToken    = await FCRToken.new()
-      marketMaker   = await LMSRMarketMaker.new()
-      tokenRatioFutarchy = await deployTokenRatioFutarchy(
-        {marketFactory, assetToken}
-      )
+  // describe('createGenericTokenCollateralEvent()', () => {
+  //   before(async () => {
+  //     marketFactory = await StandardMarketFactory.new()
+  //     assetToken    = await FCRToken.new()
+  //     marketMaker   = await LMSRMarketMaker.new()
+  //     tokenRatioFutarchy = await deployTokenRatioFutarchy(
+  //       {marketFactory, assetToken}
+  //     )
+  //   })
+  //   it.only('assigns _genericTokenCollateralEvent a categoricalEvent with _assetToken', async () => {
+  //     await tokenRatioFutarchy.initializeMarkets()
+  //     // await tokenRatioFutarchy.createAssetTokenCollateralEvent()
+  //     // let event = await tokenRatioFutarchy._assetTokenCollateralEvent()
+  //     // await tokenRatioFutarchy.createAssetTokenMarket(0)
+  //     // await tokenRatioFutarchy.createGenericTokenMarket(0)
+  //   })
+  //   it('throws if _genericTokenCollateralEvent has already been assigned')
+  // })
+
+  describe('createAssetTokenMarket()', async () => {
+    it.only('sets _assetTokenMarket and _assetTokenCollateralEvent', async () => {
+      tokenRatioFutarchy = await deployTokenRatioFutarchy()
+      expect(await tokenRatioFutarchy._assetTokenCollateralEvent()).to.equal(NULL_ADDR)
+      expect(await tokenRatioFutarchy._assetTokenMarket()).to.equal(NULL_ADDR)
+
+      await tokenRatioFutarchy.createAssetTokenMarket(0)
+      const assetMarket = await StandardMarket.at(await tokenRatioFutarchy._assetTokenMarket())
+
+      expect(await assetMarket.eventContract()).to.equal(await tokenRatioFutarchy._assetTokenCollateralEvent())
     })
-    it.only('assigns _genericTokenCollateralEvent a categoricalEvent with _assetToken', async () => {
-      await tokenRatioFutarchy.createAssetTokenCollateralEvent()
-      let event = await tokenRatioFutarchy._assetTokenCollateralEvent()
-      let marketGuy = await marketFactory.createMarket(event, marketMaker.address, 0)
-      // await tokenRatioFutarchy.createAssetTokenMarket(0)
-      console.log(marketGuy)
-    })
-    it('throws if _genericTokenCollateralEvent has already been assigned')
   })
 })
 

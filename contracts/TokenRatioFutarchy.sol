@@ -6,17 +6,17 @@ import '@gnosis.pm/gnosis-core-contracts/contracts/Events/EventFactory.sol';
 import '@gnosis.pm/gnosis-core-contracts/contracts/Tokens/EtherToken.sol';
 import '@gnosis.pm/gnosis-core-contracts/contracts/Oracles/CentralizedOracleFactory.sol';
 import 'zeppelin-solidity/contracts/math/SafeMath.sol';
+import 'zeppelin-solidity/contracts/ownership/Ownable.sol';
 
-contract TokenRatioFutarchy {
+contract TokenRatioFutarchy is Ownable{
   using SafeMath for uint256;
-
-  // Events
-  event CategoricalEventCreation(CategoricalEvent categoricalEvent, StandardToken collateralToken);
-  event MarketCreation(CategoricalEvent categoricalEvent, MarketMaker marketMaker, uint24 fee);
 
   // Storage
   CategoricalEvent public _assetTokenCollateralEvent;
   CategoricalEvent public _genericTokenCollateralEvent;
+
+  StandardMarket public _assetTokenMarket;
+  StandardMarket public _genericTokenMarket;
 
   StandardToken public _assetToken;
   StandardToken public _genericToken;
@@ -26,9 +26,10 @@ contract TokenRatioFutarchy {
 
   EventFactory public _eventFactory;
   StandardMarketFactory public _marketFactory;
+
   uint256 public _endDate;
 
-  function TokenRatioFutarchy(
+  function TokenRatioFutarchy (
     uint256 duration,
     StandardToken assetToken,
     StandardToken genericToken,
@@ -45,37 +46,37 @@ contract TokenRatioFutarchy {
     _centralizedOracle = centralizedOracleFactory.createCentralizedOracle(ipfsHash);
     _eventFactory = eventFactory;
     _marketMaker = marketMaker;
+    _marketFactory = marketFactory;
     _endDate = now.add(duration);
   }
 
-  function createAssetTokenCollateralEvent() public {
+  function createAssetTokenMarket(uint24 fee) public onlyOwner {
+    require(address(_assetTokenMarket) == 0);
+    createAssetTokenCollateralEvent();
+    _assetTokenMarket = _marketFactory.createMarket(_assetTokenCollateralEvent, _marketMaker, fee);
+  }
+
+  function createGenericTokenMarket(uint24 fee) public onlyOwner {
+    require(address(_genericTokenMarket) == 0);
+    createGenericTokenCollateralEvent();
+    _genericTokenMarket = _marketFactory.createMarket(_genericTokenCollateralEvent, _marketMaker, fee);
+  }
+
+  function createAssetTokenCollateralEvent() internal {
     require(address(_assetTokenCollateralEvent) == 0);
     _assetTokenCollateralEvent = _eventFactory.createCategoricalEvent(
       _assetToken,
       _centralizedOracle,
       2
     );
-    CategoricalEventCreation(_assetTokenCollateralEvent, _assetToken);
   }
 
-  function createGenericTokenCollateralEvent() public {
+  function createGenericTokenCollateralEvent() internal {
     require(address(_genericTokenCollateralEvent) == 0);
     _genericTokenCollateralEvent = _eventFactory.createCategoricalEvent(
       _genericToken,
       _centralizedOracle,
       2
     );
-    CategoricalEventCreation(_genericTokenCollateralEvent, _genericToken);
   }
-
-  function createAssetTokenMarket(uint24 fee) public {
-    _marketFactory.createMarket(_assetTokenCollateralEvent, _marketMaker, fee);
-    MarketCreation(_assetTokenCollateralEvent, _marketMaker, fee);
-  }
-
-  function createGenericTokenMarket(uint24 fee) public {
-    _marketFactory.createMarket(_genericTokenCollateralEvent, _marketMaker, fee);
-    MarketCreation(_genericTokenCollateralEvent, _marketMaker, fee);
-  }
-
 }
