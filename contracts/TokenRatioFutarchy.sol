@@ -8,7 +8,7 @@ import '@gnosis.pm/gnosis-core-contracts/contracts/Oracles/CentralizedOracleFact
 import 'zeppelin-solidity/contracts/math/SafeMath.sol';
 import 'zeppelin-solidity/contracts/ownership/Ownable.sol';
 
-contract TokenRatioFutarchy is Ownable{
+contract TokenRatioFutarchy is Ownable {
   using SafeMath for uint256;
 
   // Storage
@@ -60,6 +60,18 @@ contract TokenRatioFutarchy is Ownable{
     require(address(_genericTokenMarket) == 0);
     createGenericTokenCollateralEvent();
     _genericTokenMarket = _marketFactory.createMarket(_genericTokenCollateralEvent, _marketMaker, fee);
+  }
+
+  function fund(uint funding) public onlyOwner {
+    require (
+          _assetTokenCollateralEvent.collateralToken().transferFrom(msg.sender, this, funding)
+       && _genericTokenCollateralEvent.collateralToken().transferFrom(msg.sender, this, funding)
+       && _assetTokenCollateralEvent.collateralToken().approve(_assetTokenMarket, funding)
+       && _genericTokenCollateralEvent.collateralToken().approve(_genericTokenMarket, funding)
+    );
+
+    _assetTokenMarket.fund(funding);
+    _genericTokenMarket.fund(funding);
   }
 
   function createAssetTokenCollateralEvent() internal {
