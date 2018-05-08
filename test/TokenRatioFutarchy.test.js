@@ -100,7 +100,7 @@ describe('TokenRatioFutarchy', () => {
   // })
 
   describe('createAssetTokenMarket()', async () => {
-    it.only('sets _assetTokenMarket and _assetTokenCollateralEvent', async () => {
+    it('sets _assetTokenMarket and _assetTokenCollateralEvent', async () => {
       tokenRatioFutarchy = await deployTokenRatioFutarchy()
       expect(await tokenRatioFutarchy._assetTokenCollateralEvent()).to.equal(NULL_ADDR)
       expect(await tokenRatioFutarchy._assetTokenMarket()).to.equal(NULL_ADDR)

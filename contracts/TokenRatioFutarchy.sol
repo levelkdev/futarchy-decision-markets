@@ -5,6 +5,8 @@ import '@gnosis.pm/gnosis-core-contracts/contracts/Markets/StandardMarketFactory
 import '@gnosis.pm/gnosis-core-contracts/contracts/Events/EventFactory.sol';
 import '@gnosis.pm/gnosis-core-contracts/contracts/Tokens/EtherToken.sol';
 import '@gnosis.pm/gnosis-core-contracts/contracts/Oracles/CentralizedOracleFactory.sol';
+import '@gnosis.pm/gnosis-core-contracts/contracts/Oracles/FutarchyOracle.sol';
+import '@gnosis.pm/gnosis-core-contracts/contracts/Oracles/FutarchyOracleFactory.sol';
 import 'zeppelin-solidity/contracts/math/SafeMath.sol';
 import 'zeppelin-solidity/contracts/ownership/Ownable.sol';
 
@@ -48,15 +50,18 @@ contract TokenRatioFutarchy is Ownable {
     _marketMaker = marketMaker;
     _marketFactory = marketFactory;
     _endDate = now.add(duration);
+
+    createAssetTokenMarket(0);
+    createGenericTokenMarket(0);
   }
 
-  function createAssetTokenMarket(uint24 fee) public onlyOwner {
+  function createAssetTokenMarket(uint24 fee) public  {
     require(address(_assetTokenMarket) == 0);
     createAssetTokenCollateralEvent();
     _assetTokenMarket = _marketFactory.createMarket(_assetTokenCollateralEvent, _marketMaker, fee);
   }
 
-  function createGenericTokenMarket(uint24 fee) public onlyOwner {
+  function createGenericTokenMarket(uint24 fee) public  {
     require(address(_genericTokenMarket) == 0);
     createGenericTokenCollateralEvent();
     _genericTokenMarket = _marketFactory.createMarket(_genericTokenCollateralEvent, _marketMaker, fee);
@@ -72,6 +77,10 @@ contract TokenRatioFutarchy is Ownable {
 
     _assetTokenMarket.fund(funding);
     _genericTokenMarket.fund(funding);
+  }
+
+  function setOutcome() public  {
+
   }
 
   function createAssetTokenCollateralEvent() internal {
