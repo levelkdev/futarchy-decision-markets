@@ -55,7 +55,7 @@ describe('TokenRatioFutarchy', () => {
   })
 
 
-  it.only('spins up the Futarchy correctly', async () => {
+  it('spins up the Futarchy correctly', async () => {
     const genericToken  = await EtherToken.new()
     const assetToken    = await FCRToken.new()
     const oracleFactory = await CentralizedOracleFactory.new()
