@@ -35,7 +35,7 @@ contract('Conditional Futarchy', (accounts) => {
     const outcomeCount = 2
     const lowerBound = -100
     const upperBound = 100
-    const fee = 5
+    const fee = 0
     const tradingPeriod = moment.duration({days: 1}).asSeconds()
     const startDate = moment().unix() + moment.duration({seconds: 1}).asSeconds()
 
@@ -88,6 +88,9 @@ contract('Conditional Futarchy', (accounts) => {
     await logBalances()
     await logOutcomeTokenCosts()
 
+    console.log('  *** buy LONG_ACCEPTED')
+    console.log('')
+
     const buyAmt = 4 * 10 ** 18
     await etherToken.deposit({ value: buyAmt, from: longAcceptedBuyer })
     await etherToken.approve(categoricalEvent.address, buyAmt, { from: longAcceptedBuyer })
@@ -95,7 +98,7 @@ contract('Conditional Futarchy', (accounts) => {
 
     const longAcceptedCost = await getLongAcceptedCost(buyAmt)
     const longAcceptedFee = await getLongAcceptedFee(longAcceptedCost)
-    const maxCost = longAcceptedCost + longAcceptedFee
+    const maxCost = longAcceptedCost + longAcceptedFee + 1000
 
     await acceptedToken.approve(marketForAccepted.address, maxCost, { from: longAcceptedBuyer })
     await marketForAccepted.buy(0, buyAmt, maxCost, { from: longAcceptedBuyer })
@@ -137,13 +140,13 @@ contract('Conditional Futarchy', (accounts) => {
       console.log('  Market Contracts')
       console.log('  ----------------')
 
-      console.log('    ACCEPTED SCALAR')
-      console.log('    ---------------')
+      console.log('    LONG_ACCEPTED | SHORT_ACCEPTED')
+      console.log('    ------------------------------')
       await logTokenBalances(marketForAccepted.address)
       console.log('   ')
 
-      console.log('    DENIED SCALAR')
-      console.log('    -------------')
+      console.log('    LONG_DENIED | SHORT_DENIED')
+      console.log('    --------------------------')
       await logTokenBalances(marketForDenied.address)
       console.log('   ')
     }
