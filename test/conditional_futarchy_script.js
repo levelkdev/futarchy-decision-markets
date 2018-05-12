@@ -20,7 +20,7 @@ const FutarchyFactory = artifacts.require('FutarchyOracleFactory')
 
 contract('Conditional Futarchy', (accounts) => {
   it.only('create and resolve futarchy oracle', async () => {
-    const [creator] = accounts
+    const [creator, longAcceptedBuyer] = accounts
 
     const etherToken = await EtherToken.new()
     const oracleFactory = await CentralizedOracleFactory.new()
@@ -39,7 +39,7 @@ contract('Conditional Futarchy', (accounts) => {
     const tradingPeriod = moment.duration({days: 1}).asSeconds()
     const startDate = moment().unix() + moment.duration({seconds: 1}).asSeconds()
 
-    const funding = 10 ** 18
+    const funding = 10 * 10 ** 18
 
     console.log('  *** create futarchy oracle')
     console.log('')
@@ -62,11 +62,11 @@ contract('Conditional Futarchy', (accounts) => {
     const futarchyOracle = FutarchyOracle.at(futarchyOracleAddress)
     const marketForAccepted = StandardMarketWithPriceLogger.at(await futarchyOracle.markets(0))
     const marketForDenied = StandardMarketWithPriceLogger.at(await futarchyOracle.markets(1))
-    const acceptedDeniedEvent = CategoricalEvent.at(await futarchyOracle.categoricalEvent())
+    const categoricalEvent = CategoricalEvent.at(await futarchyOracle.categoricalEvent())
     const acceptedLongShortEvent = ScalarEvent.at(await marketForAccepted.eventContract())
     const deniedLongShortEvent = ScalarEvent.at(await marketForDenied.eventContract())
 
-    const acceptedDeniedTokenAddresses = await acceptedDeniedEvent.getOutcomeTokens()
+    const acceptedDeniedTokenAddresses = await categoricalEvent.getOutcomeTokens()
     const acceptedToken = OutcomeToken.at(acceptedDeniedTokenAddresses[0])
     const deniedToken = OutcomeToken.at(acceptedDeniedTokenAddresses[1])
 
@@ -88,69 +88,130 @@ contract('Conditional Futarchy', (accounts) => {
     await logBalances()
     await logOutcomeTokenCosts()
 
+    const buyAmt = 4 * 10 ** 18
+    await etherToken.deposit({ value: buyAmt, from: longAcceptedBuyer })
+    await etherToken.approve(categoricalEvent.address, buyAmt, { from: longAcceptedBuyer })
+    await categoricalEvent.buyAllOutcomes(buyAmt, { from: longAcceptedBuyer })
+
+    const longAcceptedCost = await getLongAcceptedCost(buyAmt)
+    const longAcceptedFee = await getLongAcceptedFee(longAcceptedCost)
+    const maxCost = longAcceptedCost + longAcceptedFee
+
+    await acceptedToken.approve(marketForAccepted.address, maxCost, { from: longAcceptedBuyer })
+    await marketForAccepted.buy(0, buyAmt, maxCost, { from: longAcceptedBuyer })
+
+    await logBalances()
+    await logOutcomeTokenCosts()
+
     async function logBalances () {
-      console.log('  BALANCES')
-      console.log('  --------')
-      console.log('  | MARKET CREATOR')
-      console.log('  | --------------')
+      console.log('  Token Holders')
+      console.log('  -------------')
+      console.log('    Market Creator')
+      console.log('    --------------')
       await logTokenBalances(creator)
-      console.log('  |')
+      console.log('   ')
 
-      console.log('  | ACCEPTED/DENIED EVENT CONTRACT')
-      console.log('  | ------------------------------')
-      await logTokenBalances(acceptedDeniedEvent.address)
-      console.log('  |')
+      console.log('    Buyer: LONG_ACCEPTED')
+      console.log('    --------------------')
+      await logTokenBalances(longAcceptedBuyer)
+      console.log('   ')
 
-      console.log('  | ACCEPTED SCALAR MARKET')
-      console.log('  | ----------------------')
-      await logTokenBalances(marketForAccepted.address)
-      console.log('  |')
+      console.log('  Event Contracts')
+      console.log('  ---------------')
 
-      console.log('  | DENIED SCALAR MARKET')
-      console.log('  | ----------------------')
-      await logTokenBalances(marketForDenied.address)
-      console.log('  |')
+      console.log('    ACCEPTED/DENIED : ETH')
+      console.log('    ---------------------')
+      await logTokenBalances(categoricalEvent.address)
+      console.log('   ')
 
-      console.log('  | ACCEPTED LONG/SHORT EVENT')
-      console.log('  | ----------------------')
+      console.log('    LONG/SHORT : ACCEPTED')
+      console.log('    ---------------------')
       await logTokenBalances(acceptedLongShortEvent.address)
-      console.log('  |')
+      console.log('   ')
 
-      console.log('  | DENIED LONG/SHORT EVENT')
-      console.log('  | ----------------------')
+      console.log('    LONG/SHORT : DENIED')
+      console.log('    -------------------')
       await logTokenBalances(deniedLongShortEvent.address)
       console.log('')
+
+      console.log('  Market Contracts')
+      console.log('  ----------------')
+
+      console.log('    ACCEPTED SCALAR')
+      console.log('    ---------------')
+      await logTokenBalances(marketForAccepted.address)
+      console.log('   ')
+
+      console.log('    DENIED SCALAR')
+      console.log('    -------------')
+      await logTokenBalances(marketForDenied.address)
+      console.log('   ')
     }
 
     async function logTokenBalances (account) {
       await logTokenBalance('EtherToken', etherToken, account)
-      await logTokenBalance('AcceptedToken', acceptedToken, account)
-      await logTokenBalance('DeniedToken', deniedToken, account)
-      await logTokenBalance('AcceptedLongToken', acceptedLongToken, account)
-      await logTokenBalance('AcceptedShortToken', acceptedShortToken, account)
-      await logTokenBalance('DeniedLongToken', deniedLongToken, account)
-      await logTokenBalance('DeniedShortToken', deniedShortToken, account)
+      await logTokenBalance('Accepted', acceptedToken, account)
+      await logTokenBalance('Denied', deniedToken, account)
+      await logTokenBalance('LongAccepted', acceptedLongToken, account)
+      await logTokenBalance('ShortAccepted', acceptedShortToken, account)
+      await logTokenBalance('LongDenied', deniedLongToken, account)
+      await logTokenBalance('ShortDenied', deniedShortToken, account)
     }
 
     async function logTokenBalance (tokenName, token, account) {
       const bal = (await token.balanceOf(account)).toNumber()
       if (bal > 0) {
-        console.log(`  | ${tokenName}: ${bal / 10 ** 18}`)
+        console.log(`    ${tokenName}: ${bal / 10 ** 18}`)
       }
     }
 
     async function logOutcomeTokenCosts () {
-      const longAcceptedCost = await lmsrMarketMaker.calcCost.call(marketForAccepted.address, 0, 1e15)
-      const shortAcceptedCost = await lmsrMarketMaker.calcCost.call(marketForAccepted.address, 1, 1e15)
-      const longDeniedCost = await lmsrMarketMaker.calcCost.call(marketForDenied.address, 0, 1e15)
-      const shortDeniedCost = await lmsrMarketMaker.calcCost.call(marketForDenied.address, 1, 1e15)
+      const longAcceptedCost = await getLongAcceptedCost(1e15)
+      const shortAcceptedCost = await getShortAcceptedCost(1e15)
+      const longDeniedCost = await getLongDeniedCost(1e15)
+      const shortDeniedCost = await getShortDeniedCost(1e15)
       console.log('  TOKEN PRICES')
       console.log('  ------------')
-      console.log('  LONG_ACCEPTED: ', longAcceptedCost.toNumber() / 10 ** 18)
-      console.log('  SHORT_ACCEPTED: ', shortAcceptedCost.toNumber() / 10 ** 18)
-      console.log('  LONG_DENIED: ', longDeniedCost.toNumber() / 10 ** 18)
-      console.log('  SHORT_DENIED: ', shortDeniedCost.toNumber() / 10 ** 18)
+      console.log('  LONG_ACCEPTED: ', longAcceptedCost / 10 ** 15)
+      console.log('  SHORT_ACCEPTED: ', shortAcceptedCost / 10 ** 15)
+      console.log('  LONG_DENIED: ', longDeniedCost / 10 ** 15)
+      console.log('  SHORT_DENIED: ', shortDeniedCost / 10 ** 15)
       console.log('')
+    }
+
+    async function getLongAcceptedCost (tokenAmount) {
+      const cost = await getOutcomeTokenCost(marketForAccepted.address, 0, tokenAmount)
+      return cost
+    }
+
+    async function getLongAcceptedFee (tokenCost) {
+      const fee = await getMarketFee(marketForAccepted, tokenCost)
+      return fee
+    }
+
+    async function getShortAcceptedCost (tokenAmount) {
+      const cost = await getOutcomeTokenCost(marketForAccepted.address, 1, tokenAmount)
+      return cost
+    }
+
+    async function getLongDeniedCost (tokenAmount) {
+      const cost = await getOutcomeTokenCost(marketForDenied.address, 0, tokenAmount)
+      return cost
+    }
+
+    async function getShortDeniedCost (tokenAmount) {
+      const cost = await getOutcomeTokenCost(marketForDenied.address, 1, tokenAmount)
+      return cost
+    }
+
+    async function getOutcomeTokenCost (marketAddress, outcomeTokenIndex, tokenAmount) {
+      const cost = await lmsrMarketMaker.calcCost.call(marketAddress, outcomeTokenIndex, tokenAmount)
+      return cost.toNumber()
+    }
+
+    async function getMarketFee (market, tokenCost) {
+      const fee = await market.calcMarketFee.call(tokenCost)
+      return fee.toNumber()
     }
   })
 })
