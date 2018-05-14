@@ -3,13 +3,17 @@
 // import lkTestHelpers from 'lk-test-helpers'
 import moment from 'moment'
 
+const Token = artifacts.require('Token')
 const EtherToken = artifacts.require('EtherToken')
 const OutcomeToken = artifacts.require('OutcomeToken')
 const CentralizedOracleFactory = artifacts.require('CentralizedOracleFactory')
+const Event = artifacts.require('Event')
 const EventFactory = artifacts.require('EventFactory')
 const CategoricalEvent = artifacts.require('CategoricalEvent')
 const ScalarEvent = artifacts.require('ScalarEvent')
 const LMSRMarketMaker = artifacts.require('LMSRMarketMaker')
+const StandardMarket = artifacts.require('StandardMarket')
+const StandardMarketFactory = artifacts.require('StandardMarketFactory')
 const StandardMarketWithPriceLogger = artifacts.require('StandardMarketWithPriceLogger')
 const StandardMarketWithPriceLoggerFactory = artifacts.require('StandardMarketWithPriceLoggerFactory')
 const FutarchyOracle = artifacts.require('FutarchyOracle')
@@ -29,6 +33,7 @@ contract('Conditional Futarchy', (accounts) => {
     const lmsrMarketMaker = await LMSRMarketMaker.new()
     const {logs} = await oracleFactory.createCentralizedOracle(ipfsHash)
     const centralizedOracleAddress = logs.find(e => e.event === 'CentralizedOracleCreation').args.centralizedOracle
+    const standardMarketFactory = await StandardMarketFactory.new()
     const smpLoggerFactory = await StandardMarketWithPriceLoggerFactory.new()
     const futarchyFactory = await FutarchyFactory.new(eventFactory.address, smpLoggerFactory.address)
 
@@ -39,11 +44,10 @@ contract('Conditional Futarchy', (accounts) => {
     const tradingPeriod = moment.duration({days: 1}).asSeconds()
     const startDate = moment().unix() + moment.duration({seconds: 1}).asSeconds()
 
-    const funding = 10 * 10 ** 18
+    const categoricalMarketFunding = 10 * 10 ** 18
+    const scalarMarketFunding = 10 * 10 ** 18
 
     console.log('  *** create futarchy oracle')
-    console.log('')
-
     const { logs: createFutarchyOracleLogs } = await futarchyFactory.createFutarchyOracle(
       etherToken.address,
       centralizedOracleAddress,
@@ -66,6 +70,19 @@ contract('Conditional Futarchy', (accounts) => {
     const acceptedLongShortEvent = ScalarEvent.at(await marketForAccepted.eventContract())
     const deniedLongShortEvent = ScalarEvent.at(await marketForDenied.eventContract())
 
+    // create standard market w/ LMSR for categorical event
+    console.log('  *** create categorical market')
+    const categoricalEventMarketFee = 0
+    const { logs: createCategoricalMarketLogs } = await standardMarketFactory.createMarket(
+      categoricalEvent.address,
+      lmsrMarketMaker.address,
+      categoricalEventMarketFee
+    )
+    const { market: categoricalMarketAddress } = createCategoricalMarketLogs.find(
+      e => e.event === 'StandardMarketCreation'
+    ).args
+    const categoricalMarket = StandardMarket.at(categoricalMarketAddress)
+
     const acceptedDeniedTokenAddresses = await categoricalEvent.getOutcomeTokens()
     const acceptedToken = OutcomeToken.at(acceptedDeniedTokenAddresses[0])
     const deniedToken = OutcomeToken.at(acceptedDeniedTokenAddresses[1])
@@ -78,15 +95,13 @@ contract('Conditional Futarchy', (accounts) => {
     const deniedLongToken = OutcomeToken.at(deniedLongShortTokenAddresses[0])
     const deniedShortToken = OutcomeToken.at(deniedLongShortTokenAddresses[1])
 
-    console.log('  *** fund the futarchy oracle')
+    console.log('  *** fund the futarchy oracle (which funds the scalar markets)')
+    await fundMarket(futarchyOracle, etherToken, scalarMarketFunding, creator)
+
+    console.log('  *** fund the categorical market')
+    await fundMarket(categoricalMarket, etherToken, categoricalMarketFunding, creator)
+
     console.log('')
-
-    await etherToken.deposit({ value: funding, from: creator })
-    await etherToken.approve(futarchyOracle.address, funding, { from: creator })
-    await futarchyOracle.fund(funding, { from: creator })
-
-    await logBalances()
-    await logOutcomeTokenCosts()
 
     console.log('  *** buy LONG_ACCEPTED')
     console.log('')
@@ -94,17 +109,34 @@ contract('Conditional Futarchy', (accounts) => {
     const buyAmt = 4 * 10 ** 18
     await etherToken.deposit({ value: buyAmt, from: longAcceptedBuyer })
     await etherToken.approve(categoricalEvent.address, buyAmt, { from: longAcceptedBuyer })
-    await categoricalEvent.buyAllOutcomes(buyAmt, { from: longAcceptedBuyer })
 
-    const longAcceptedCost = await getLongAcceptedCost(buyAmt)
-    const longAcceptedFee = await getLongAcceptedFee(longAcceptedCost)
-    const maxCost = longAcceptedCost + longAcceptedFee + 1000
+    await marketBuy(categoricalMarket, 0, buyAmt, longAcceptedBuyer)
 
-    await acceptedToken.approve(marketForAccepted.address, maxCost, { from: longAcceptedBuyer })
-    await marketForAccepted.buy(0, buyAmt, maxCost, { from: longAcceptedBuyer })
+    await marketBuy(marketForAccepted, 0, buyAmt, longAcceptedBuyer)
 
     await logBalances()
     await logOutcomeTokenCosts()
+
+    async function marketBuy (market, outcomeTokenIndex, buyAmount, from) {
+      const evtContract = Event.at(await market.eventContract())
+      const collateralToken = Token.at(await evtContract.collateralToken())
+      const cost = await getOutcomeTokenCost(
+        market.address,
+        outcomeTokenIndex,
+        buyAmount
+      )
+      const fee = await getMarketFee(market, cost)
+      const maxCost = cost + fee + 1000
+
+      await collateralToken.approve(market.address, maxCost, { from })
+      await market.buy(0, buyAmt, maxCost, { from })
+    }
+
+    async function fundMarket (market, collateralToken, fundingAmount, from) {
+      await collateralToken.deposit({ value: fundingAmount, from })
+      await collateralToken.approve(market.address, fundingAmount, { from })
+      await market.fund(fundingAmount, { from })
+    }
 
     async function logBalances () {
       console.log('  Token Holders')
@@ -140,6 +172,11 @@ contract('Conditional Futarchy', (accounts) => {
       console.log('  Market Contracts')
       console.log('  ----------------')
 
+      console.log('    ACCEPTED | DENIED')
+      console.log('    ------------------------------')
+      await logTokenBalances(categoricalMarket.address)
+      console.log('   ')
+
       console.log('    LONG_ACCEPTED | SHORT_ACCEPTED')
       console.log('    ------------------------------')
       await logTokenBalances(marketForAccepted.address)
@@ -169,42 +206,21 @@ contract('Conditional Futarchy', (accounts) => {
     }
 
     async function logOutcomeTokenCosts () {
-      const longAcceptedCost = await getLongAcceptedCost(1e15)
-      const shortAcceptedCost = await getShortAcceptedCost(1e15)
-      const longDeniedCost = await getLongDeniedCost(1e15)
-      const shortDeniedCost = await getShortDeniedCost(1e15)
-      console.log('  TOKEN PRICES')
-      console.log('  ------------')
-      console.log('  LONG_ACCEPTED: ', longAcceptedCost / 10 ** 15)
+      const acceptedCost = await getOutcomeTokenCost(categoricalMarket.address, 0, 1e15)
+      const deniedCost = await getOutcomeTokenCost(categoricalMarket.address, 1, 1e15)
+      const longAcceptedCost = await getOutcomeTokenCost(marketForAccepted.address, 0, 1e15)
+      const shortAcceptedCost = await getOutcomeTokenCost(marketForAccepted.address, 1, 1e15)
+      const longDeniedCost = await getOutcomeTokenCost(marketForDenied.address, 0, 1e15)
+      const shortDeniedCost = await getOutcomeTokenCost(marketForDenied.address, 1, 1e15)
+      console.log('  Outcome Token Prices')
+      console.log('  --------------------')
+      console.log('  ACCEPTED:       ', acceptedCost / 10 ** 15)
+      console.log('  DENIED:         ', deniedCost / 10 ** 15)
+      console.log('  LONG_ACCEPTED:  ', longAcceptedCost / 10 ** 15)
       console.log('  SHORT_ACCEPTED: ', shortAcceptedCost / 10 ** 15)
-      console.log('  LONG_DENIED: ', longDeniedCost / 10 ** 15)
-      console.log('  SHORT_DENIED: ', shortDeniedCost / 10 ** 15)
+      console.log('  LONG_DENIED:    ', longDeniedCost / 10 ** 15)
+      console.log('  SHORT_DENIED:   ', shortDeniedCost / 10 ** 15)
       console.log('')
-    }
-
-    async function getLongAcceptedCost (tokenAmount) {
-      const cost = await getOutcomeTokenCost(marketForAccepted.address, 0, tokenAmount)
-      return cost
-    }
-
-    async function getLongAcceptedFee (tokenCost) {
-      const fee = await getMarketFee(marketForAccepted, tokenCost)
-      return fee
-    }
-
-    async function getShortAcceptedCost (tokenAmount) {
-      const cost = await getOutcomeTokenCost(marketForAccepted.address, 1, tokenAmount)
-      return cost
-    }
-
-    async function getLongDeniedCost (tokenAmount) {
-      const cost = await getOutcomeTokenCost(marketForDenied.address, 0, tokenAmount)
-      return cost
-    }
-
-    async function getShortDeniedCost (tokenAmount) {
-      const cost = await getOutcomeTokenCost(marketForDenied.address, 1, tokenAmount)
-      return cost
     }
 
     async function getOutcomeTokenCost (marketAddress, outcomeTokenIndex, tokenAmount) {
